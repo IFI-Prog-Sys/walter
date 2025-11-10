@@ -1,0 +1,2 @@
+whitelist reload
+schedule function walter_server_integrations:loop 15s replace

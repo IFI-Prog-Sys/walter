@@ -1,0 +1,10 @@
+[Unit]
+Description=Walter The Whitelister
+
+[Service]
+ExecStart=/usr/bin/python /path/to/main.py
+WorkingDirectory=/path/to/walter/folder
+
+
+[Install]
+WantedBy=default.target
