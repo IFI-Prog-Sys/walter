@@ -34,7 +34,7 @@ walter/
     - Read Message History
     - Use Application Commands
     - **Note:** There is a good chance not all these permissions are strictly speaking necessary but these are what have worked for us.
-5. In walter's "data" directory, create a symlink called "whitelist.json" that points to your server's whitelist.json file.
+5. In the /data/ directory, create a symlink called "whitelist.json" that points to your server's whitelist.json file.
 6. Edit "walter.service" and specify the "ExecStart" directory and "WorkingDirectory"
 7. Copy the provided walter.service file into "/etc/systemd/user/" 
 8. Start the service by running
@@ -45,7 +45,7 @@ $ systemctl --user start walter.service
 ```bash
 $ systemctl --user enable walter.service
 ```
-10. Copy the provided  "walter\_server\_integrations" datapack into your server's world/datapacks/ directory.
+10. Copy the provided  "walter\_server\_integrations" datapack into your server's /world/datapacks/ directory.
 11. *(if already running)* Restart your Minecraft server to enable the new datapack
 12. In your server console run:
 ```
