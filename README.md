@@ -25,8 +25,8 @@ walter/
 **Note:** Walter has currently been tested on Python 3.9.21 running on Oracle Linux Server release 9.6
 
 1. Create an application in the Discord Developer Portal
-2. Copy the secret API key under "token:" in the secrets.json file
-3. Copy your server's guild ID under "guild\_id:" in secrets.json
+2. Copy the secret application API key to the value under "token:" in /data/secrets.json
+3. Copy your server's guild ID to the value under "guild\_id:" in /data/secrets.json
 4. Invite your new Discord application into your server with the following permissions:
     - View Channels
     - Send Messages and Create Posts
