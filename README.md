@@ -9,6 +9,7 @@ The systemd service runds the main.py file in the background, makes the necesarr
 The datapack forces the server to acknowledge these updates by reloading the whitelist table every 15 s.
 
 ## File structure
+```
 walter/
 ├── data
 │   ├── discord_database
@@ -17,3 +18,4 @@ walter/
 │   └── whitelist.json -> /path/to/whitelist.json
 ├── main.py
 └── walter.py
+```
