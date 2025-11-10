@@ -22,7 +22,6 @@ walter/
 ```
 
 ## Getting started
-
 **Note:** Walter has currently been tested on Python 3.9.21 running on Oracle Linux Server release 9.6
 
 1. Create an application in the Discord Developer Portal
@@ -42,12 +41,12 @@ walter/
 ```bash
 $ systemctl --user start walter.service
 ```
-9. (optional) Enable auto startup by running
+9. *(optional)* Enable auto startup by running
 ```bash
 $ systemctl --user enable walter.service
 ```
 10. Copy the provided  "walter\_server\_integrations" datapack into your server's world/datapacks/ directory.
-11. (if already running) Restart your server to enable the new datapack
+11. *(if already running)* Restart your server to enable the new datapack
 12. In your server console run:
 ```
 > function walter_server_integrations:start
