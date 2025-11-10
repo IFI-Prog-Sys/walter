@@ -5,8 +5,8 @@ Prog.Sys();'s one and only Minecraft whitelist management bot
 Walter is essentially a specialised JSON editor that, upon request, modifies the Minecraft server whitelist.json.
 
 The bot comes in two parts; The sytemd service and the datapack.
-The systemd service runs the main.py file in the background, makes the necessary edits to the whitelist.json file.
-The datapack forces the server to acknowledge these updates by reloading the whitelist table every 15 s.
+The systemd service runs the main.py file in the background, and makes the necessary edits to the whitelist.json file.
+The datapack forces the server to acknowledge these updates by reloading the whitelist every 15 s.
 
 ## File structure
 **Note:** Install files are not included
