@@ -46,7 +46,7 @@ $ systemctl --user start walter.service
 $ systemctl --user enable walter.service
 ```
 10. Copy the provided  "walter\_server\_integrations" datapack into your server's world/datapacks/ directory.
-11. *(if already running)* Restart your server to enable the new datapack
+11. *(if already running)* Restart your Minecraft server to enable the new datapack
 12. In your server console run:
 ```
 > function walter_server_integrations:start
