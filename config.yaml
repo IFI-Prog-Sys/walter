@@ -1,0 +1,3 @@
+paths:
+  discord_database: "./data/discord_database"
+  minecraft_database: "./data/minecraft_database"
