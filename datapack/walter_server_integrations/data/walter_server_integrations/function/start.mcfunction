@@ -1,1 +1,0 @@
-function walter_server_integrations:loop
