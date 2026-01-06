@@ -1,5 +1,4 @@
 paths:
-  discord_database: "./data/discord_database"
-  minecraft_database: "./data/minecraft_database"
+  discord_database: "./discord_database.db"
 admin_uid: "YOUR_UID_HERE"
 rcon_secret: "YOUR_RCON_PASSWORD_HERE"

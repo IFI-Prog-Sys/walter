@@ -1,7 +1,9 @@
+from datetime import datetime
 import logging
 import sys
 import signal
 from enum import Enum
+import sqlite3
 import requests
 from mcrcon import MCRcon
 
@@ -9,18 +11,16 @@ from mcrcon import MCRcon
 Walter backend for managing Minecraft whitelisting.
 
 This module encapsulates the logic for:
-- Tracking which Discord users have consumed their whitelist token.
-- Tracking which Minecraft players are already whitelisted.
+- Tracking which Discord users have consumed their whitelist token using a SQLite database.
 - Validating Minecraft usernames against Mojang's API.
 - Interacting with a local Minecraft server via RCON to add players to the whitelist.
-- Persisting the above state to simple space-delimited files.
 
 Logging:
-- INFO: Operational messages (databases loaded, RCON responses).
+- INFO: Operational messages (database loaded, RCON responses).
 - ERROR: Failures (I/O errors, network validation errors).
 
 Signals:
-- SIGINT, SIGTERM: Trigger clean RCON disconnect and process exit.
+- SIGINT, SIGTERM: Trigger clean RCON disconnect, database connection closure, and process exit.
 """
 
 # ▗▄▄▖  ▗▄▖ ▗▖ ▗▖▗▄▄▄▖▗▄▄▖ ▗▄▄▄▖▗▄▄▄
@@ -66,6 +66,7 @@ class WalterStatus(Enum):
         MINECRAFT_USER_NOT_VALID: The provided Minecraft username did not validate
             against the Mojang API (or validation error occurred).
     """
+
     OK = 0
     DISCORD_ALREADY_USED = 1
     ALREADY_WHITELISTED = 2
@@ -79,52 +80,51 @@ class Walter:
     Responsibilities:
         - Connects to a local Minecraft server via RCON.
         - Validates Minecraft usernames using Mojang's public API.
-        - Tracks and persists which Discord users have used their whitelist token.
-        - Tracks and persists which Minecraft players are already whitelisted.
-        - Handles SIGINT/SIGTERM to gracefully close RCON before exiting.
+        - Tracks which Discord users have used their whitelist token in a SQLite database.
+        - Handles SIGINT/SIGTERM to gracefully close RCON and database connections before exiting.
 
     Parameters:
-        path_to_discord_database (str): Path to the file tracking Discord users
-            who have consumed their whitelist token. Space-delimited usernames.
-        path_to_minecraft_database (str): Path to the file tracking already
-            whitelisted Minecraft player names. Space-delimited usernames.
+        path_to_discord_database (str): Path to the SQLite database file for tracking
+            Discord users who have consumed their whitelist token.
         rcon_secret (str): RCON password used to authenticate to the local server.
 
     Notes:
         - RCON is initialized against 127.0.0.1 using the provided secret.
-        - Files are read at initialization and written back when state changes.
-        - Signal handlers are registered for SIGINT and SIGTERM.
+        - The database is connected at initialization.
+        - Signal handlers are registered for SIGINT and SIGTERM for graceful shutdown.
     """
+
     def __init__(
         self,
         path_to_discord_database: str,
-        path_to_minecraft_database: str,
         rcon_secret: str,
     ):
         self.rcon_socket = MCRcon("127.0.0.1", rcon_secret)
         self.rcon_socket.connect()
 
-        self._already_used: set[str] = self.recall_who_used(path_to_discord_database)
-        logger.info("Loaded Discord database")
+        self._discord_database_connection = sqlite3.connect(path_to_discord_database)
+        self._discord_database_cursor = self._discord_database_connection.cursor()
+        logger.info("Connected to Discord database")
 
-        self._already_whitelisted: set[str] = self.recall_who_used(
-            path_to_minecraft_database
-        )
-        logger.info("Loaded Minecraft database")
-
-        self._path_to_discord_database: str = path_to_discord_database
-        self._path_to_minecraft_database: str = path_to_minecraft_database
+        result = self._discord_database_cursor.execute("SELECT * FROM sqlite_master")
+        if result.fetchone() is None:
+            logger.info("Discord username database was empty; Creating new table")
+            self._discord_database_cursor.execute(
+                "CREATE TABLE users(username, tokens, created)"
+            )
+            logger.info("Create Table OK")
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, self._signal_close)
 
     def _signal_close(self, signum, frame):
         """
-        Signal handler to gracefully disconnect RCON and exit.
+        Signal handler to gracefully disconnect RCON, close the database, and exit.
 
         Actions:
             - Logs the received signal.
             - Disconnects the RCON socket.
+            - Closes the SQLite database connection.
             - Restores default handling for the received signal.
             - Raises KeyboardInterrupt on SIGINT or SystemExit on SIGTERM to exit.
 
@@ -133,34 +133,14 @@ class Walter:
             frame: The current stack frame (unused).
 
         Side Effects:
-            - Disconnects RCON.
+            - Disconnects RCON and closes the database connection.
             - Terminates the process via exception to allow upstream handling.
         """
         logger.info("Received signal %s; closing RCON and exiting.", signum)
         self.rcon_socket.disconnect()
+        self._discord_database_connection.close()
         signal.signal(signum, signal.SIG_DFL)
         raise KeyboardInterrupt if signum == signal.SIGINT else SystemExit
-
-    def recall_who_used(self, path_to_file: str) -> set[str]:
-        """
-        Load a set of usernames from a space-delimited file.
-
-        Parameters:
-            path_to_file (str): Path to the file to read.
-
-        Returns:
-            set[str]: A set of strings parsed from the file. Empty strings are
-                      ignored if present due to strip/split behavior.
-
-        Raises:
-            FileNotFoundError, OSError: If the file cannot be opened.
-            UnicodeDecodeError: If the file cannot be decoded as UTF-8.
-
-        Notes:
-            - The file is expected to contain usernames separated by whitespace.
-        """
-        with open(path_to_file, "r", encoding="utf-8") as file:
-            return set(file.read().strip().split())
 
     def __check_minecraft_user_is_valid(self, username: str) -> bool:
         """
@@ -197,7 +177,7 @@ class Walter:
             logger.error("Error validating Minecraft user %s: %s", username, e)
             return False
 
-    def __add_player_to_whitelist(self, player_name: str):
+    def __add_player_to_whitelist(self, player_name: str) -> WalterStatus:
         """
         Issue an RCON command to add a player to the Minecraft whitelist.
 
@@ -214,18 +194,22 @@ class Walter:
         response = self.rcon_socket.command(f"/whitelist add {player_name}")
         logger.info("(RCON) %s", response)
 
+        if response == "Player is already whitelisted":
+            return WalterStatus.ALREADY_WHITELISTED
+        return WalterStatus.OK
+
     def add_to_whitelist(
         self, discord_username: str, player_name: str
-    ) -> WalterStatus:  # returns 0 if sucess, returns 1 if issue
+    ) -> WalterStatus:
         """
-        Add a Minecraft player to the whitelist, enforcing per-Discord-user limits.
+        Add a Minecraft player to the whitelist, enforcing a one-token-per-Discord-user limit.
 
         Workflow:
-            1. Check if the Discord user has already used their whitelist token.
-            2. Check if the Minecraft player is already whitelisted.
-            3. Validate the Minecraft username via Mojang API.
-            4. Add the player via RCON if valid and not already present.
-            5. Persist updated state to disk for both Discord and Minecraft databases.
+            1. Check if the Discord user has already used their whitelist token by querying the database.
+            2. Validate the Minecraft username via Mojang's API.
+            3. Attempt to add the player to the server's whitelist via RCON.
+            4. If the player is successfully added, record the Discord user in the database
+               to mark their token as used.
 
         Parameters:
             discord_username (str): The invoking Discord user's name (or identifier).
@@ -234,60 +218,57 @@ class Walter:
         Returns:
             WalterStatus:
                 - DISCORD_ALREADY_USED: The Discord user has already consumed their token.
-                - ALREADY_WHITELISTED: The player is already whitelisted.
                 - MINECRAFT_USER_NOT_VALID: Username validation failed.
-                - OK: Successfully whitelisted and state persisted.
+                - ALREADY_WHITELISTED: The player is already on the whitelist.
+                - OK: Successfully added to whitelist and user recorded in database.
 
         Side Effects:
-            - Writes to the Discord and Minecraft username database files.
-            - Sends an RCON command to the server.
-
-        Notes:
-            - Persistence uses space-delimited files and overwrites the entire file.
+            - Sends an RCON command to the Minecraft server.
+            - Writes to the Discord user database if the operation is successful.
         """
-        if discord_username in self._already_used:
+        database_query_result = self._discord_database_cursor.execute(
+            f"SELECT username FROM users WHERE username='{discord_username}'"
+        )
+        username_exists = database_query_result.fetchone() is not None
+        if username_exists:
             return WalterStatus.DISCORD_ALREADY_USED
-        if player_name in self._already_whitelisted:
-            return WalterStatus.ALREADY_WHITELISTED
 
-        valid = self.__check_minecraft_user_is_valid(player_name)
-
-        if not valid:
+        minecraft_username_is_valid = self.__check_minecraft_user_is_valid(player_name)
+        if not minecraft_username_is_valid:
             return WalterStatus.MINECRAFT_USER_NOT_VALID
 
-        self.__add_player_to_whitelist(player_name)
+        add_to_whitelist_response = self.__add_player_to_whitelist(player_name)
 
-        self._already_used.add(discord_username)
-        self.__write_to_username_database(
-            self._path_to_discord_database, self._already_used
-        )
+        if add_to_whitelist_response is WalterStatus.ALREADY_WHITELISTED:
+            return add_to_whitelist_response
 
-        self._already_whitelisted.add(player_name)
-        self.__write_to_username_database(
-            self._path_to_minecraft_database, self._already_whitelisted
-        )
+        self.__write_to_username_database(discord_username)
 
-        return WalterStatus.OK
+        return add_to_whitelist_response
 
-    def __write_to_username_database(self, path_to_database, names):
+    def __write_to_username_database(self, discord_username: str):
         """
-        Persist a set of usernames to a space-delimited file.
+        Records a Discord user in the database to mark their whitelist token as used.
 
         Parameters:
-            path_to_database (str): Path to the output file to write.
-            names (set[str] | Iterable[str]): Collection of usernames to write.
+            discord_username (str): The Discord username to record.
 
         Side Effects:
-            - Overwrites the target file with usernames separated by single spaces.
+            - Inserts a new row into the 'users' table with the username, a token count
+              (currently hardcoded to 0), and the creation timestamp.
+            - Commits the transaction to the database.
 
         Raises:
-            Logs ERROR on any exception encountered during write.
-
-        Notes:
-            - The order of names in the file is arbitrary due to set iteration.
+            Logs ERROR on any exception encountered during the database operation.
         """
         try:
-            with open(path_to_database, "w", encoding="utf-8") as file:
-                file.write(" ".join(names))
+            current_time = datetime.now().isoformat()
+            self._discord_database_cursor.execute(f"""
+                INSERT INTO users VALUES
+                    ('{discord_username}', 0, '{current_time}')
+            """)
+            self._discord_database_connection.commit()
+            logger.info("Added %s to database", discord_username)
+
         except Exception as e:
-            logger.error("Error writing to username database: %s", e)
+            logger.error("Error adding %s to username database: %s", discord_username, e)
