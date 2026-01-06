@@ -107,7 +107,7 @@ class Walter:
         logger.info("Connected to Discord database")
 
         result = self._discord_database_cursor.execute("SELECT * FROM sqlite_master")
-        if result.fetchone is None:
+        if result.fetchone() is None:
             logger.info("Discord username database was empty; Creating new table")
             self._discord_database_cursor.execute(
                 "CREATE TABLE users(username, tokens, created)"
