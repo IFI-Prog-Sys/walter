@@ -158,7 +158,7 @@ def main():
               - Otherwise: Success response indicating whitelist update may take ~30 seconds.
 
         Responses:
-            Sends one ephemeral message to the invoking user describing the outcome.
+            Sends one message to the invoking user describing the outcome.
         """
         discord_username = str(interaction.user)
         status_code = walter.add_to_whitelist(discord_username, minecraft_username)
