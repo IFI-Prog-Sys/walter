@@ -1,7 +1,9 @@
+from datetime import datetime
 import logging
 import sys
 import signal
 from enum import Enum
+import sqlite3
 import requests
 from mcrcon import MCRcon
 
@@ -66,6 +68,7 @@ class WalterStatus(Enum):
         MINECRAFT_USER_NOT_VALID: The provided Minecraft username did not validate
             against the Mojang API (or validation error occurred).
     """
+
     OK = 0
     DISCORD_ALREADY_USED = 1
     ALREADY_WHITELISTED = 2
@@ -95,6 +98,7 @@ class Walter:
         - Files are read at initialization and written back when state changes.
         - Signal handlers are registered for SIGINT and SIGTERM.
     """
+
     def __init__(
         self,
         path_to_discord_database: str,
@@ -103,10 +107,17 @@ class Walter:
         self.rcon_socket = MCRcon("127.0.0.1", rcon_secret)
         self.rcon_socket.connect()
 
-        self._already_used: set[str] = self.recall_who_used(path_to_discord_database)
-        logger.info("Loaded Discord database")
+        self._discord_database_connection = sqlite3.connect(path_to_discord_database)
+        self._discord_database_cursor = self._discord_database_connection.cursor()
+        logger.info("Connected to Discord database")
 
-        self._path_to_discord_database: str = path_to_discord_database
+        result = self._discord_database_cursor.execute("SELECT * FROM sqlite_master")
+        if result.fetchone is None:
+            logger.info("Discord username database was empty; Creating new table")
+            self._discord_database_cursor.execute(
+                "CREATE TABLE users(username, tokens, created)"
+            )
+            logger.info("Create Table OK")
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, self._signal_close)
@@ -131,6 +142,7 @@ class Walter:
         """
         logger.info("Received signal %s; closing RCON and exiting.", signum)
         self.rcon_socket.disconnect()
+        self._discord_database_connection.close()
         signal.signal(signum, signal.SIG_DFL)
         raise KeyboardInterrupt if signum == signal.SIGINT else SystemExit
 
@@ -206,7 +218,7 @@ class Walter:
         """
         response = self.rcon_socket.command(f"/whitelist add {player_name}")
         logger.info("(RCON) %s", response)
-        
+
         if response == "Player is already whitelisted":
             return WalterStatus.ALREADY_WHITELISTED
         return WalterStatus.OK
@@ -242,7 +254,11 @@ class Walter:
         Notes:
             - Persistence uses space-delimited files and overwrites the entire file.
         """
-        if discord_username in self._already_used:
+        database_query_result = self._discord_database_cursor.execute(
+            f"SELECT username FROM users WHERE username='{discord_username}'"
+        )
+        username_exists = database_query_result.fetchone() is not None
+        if username_exists:
             return WalterStatus.DISCORD_ALREADY_USED
 
         minecraft_username_is_valid = self.__check_minecraft_user_is_valid(player_name)
@@ -254,14 +270,11 @@ class Walter:
         if add_to_whitelist_response is WalterStatus.ALREADY_WHITELISTED:
             return add_to_whitelist_response
 
-        self._already_used.add(discord_username)
-        self.__write_to_username_database(
-            self._path_to_discord_database, self._already_used
-        )
+        self.__write_to_username_database(discord_username)
 
         return add_to_whitelist_response
 
-    def __write_to_username_database(self, path_to_database, names):
+    def __write_to_username_database(self, discord_username: str):
         """
         Persist a set of usernames to a space-delimited file.
 
@@ -279,7 +292,13 @@ class Walter:
             - The order of names in the file is arbitrary due to set iteration.
         """
         try:
-            with open(path_to_database, "w", encoding="utf-8") as file:
-                file.write(" ".join(names))
+            current_time = datetime.now().isoformat()
+            self._discord_database_cursor.execute(f"""
+                INSERT INTO users VALUES
+                    ('{discord_username}', 0, '{current_time}')
+            """)
+            self._discord_database_connection.commit()
+            logger.info("Added %s to database", discord_username)
+
         except Exception as e:
-            logger.error("Error writing to username database: %s", e)
+            logger.error("Error adding %s to username database: %s", discord_username, e)
