@@ -1,1 +1,0 @@
-schedule clear walter_server_integrations:loop
