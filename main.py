@@ -6,6 +6,24 @@ from discord import app_commands
 import yaml
 from walter import Walter, WalterStatus
 
+"""
+Walter Discord Bot entrypoint.
+
+This module configures logging, loads runtime configuration, initializes the Discord client
+and application commands, and wires the bot to the Walter backend for managing Minecraft
+whitelist entries via a slash command.
+
+Environment variables required:
+- WALTER_DISCORD_KEY: Discord bot token
+- WALTER_GUILD_ID: Target guild (server) ID where commands are registered
+
+Configuration file:
+- config.yaml in the working directory, expected to contain:
+  paths:
+    discord_database: <path to discord DB>
+  rcon_secret: <secret>
+"""
+
 # ▗▄▄▖  ▗▄▖ ▗▖ ▗▖▗▄▄▄▖▗▄▄▖ ▗▄▄▄▖▗▄▄▄
 # ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌ ▐▌▐▌   ▐▌  █
 # ▐▛▀▘ ▐▌ ▐▌▐▌ ▐▌▐▛▀▀▘▐▛▀▚▖▐▛▀▀▘▐▌  █
@@ -39,17 +57,24 @@ logger.addHandler(handler_error)
 
 
 def load_config() -> dict:
-    """Load configuration from config.yaml.
+    """
+    Load and validate configuration from config.yaml.
 
-    Reads config.yaml from the working directory, parses it as YAML,
-    and validates that the root is a dict.
+    Reads config.yaml from the working directory, parses it as YAML, and ensures the
+    top-level structure is a dictionary.
 
     Returns:
-        dict: Parsed configuration mapping.
+        dict: The parsed configuration mapping.
 
-    Exits:
-        - On malformed YAML (logs an error and exits with status 1).
-        - On unexpected structure or IO issues (logs an error and exits with status 1).
+    Raises:
+        SystemExit: If the file contains malformed YAML or the structure is unexpected,
+                    or if there are I/O issues. In these cases, an error is logged
+                    and the process exits with status code 1.
+
+    Notes:
+        - This function assumes config.yaml exists in the current working directory.
+        - Expected keys (validated elsewhere): "paths.discord_database",
+          "rcon_secret".
     """
     try:
         with open("config.yaml", "r", encoding="utf-8") as file:
@@ -66,31 +91,34 @@ def load_config() -> dict:
 
 
 def main():
-    """Entrypoint for the Walter Discord bot.
+    """
+    Entrypoint for the Walter Discord bot.
 
-    Steps:
-    1. Load configuration (database paths) via load_config().
+    Workflow:
+    1. Load configuration via load_config() (database paths, RCON secret).
     2. Read required environment variables:
        - WALTER_DISCORD_KEY (bot token)
-       - WALTER_GUILD_ID (guild/server ID)
-       - ADMIN_UID (User ID of admin to be pinged)
-    3. Initialize Discord client and application command tree.
-    4. Instantiate Walter backend with database paths.
-    5. Register the /whitelist command and ready event.
-    6. Start the Discord client.
+       - WALTER_GUILD_ID (target guild/server ID)
+    3. Initialize the Discord client and the application command tree.
+    4. Instantiate the Walter backend with configured paths and secrets.
+    5. Register the /whitelist command and the on_ready event handler.
+    6. Run the Discord client.
 
     Side Effects:
-        - Configures Discord presence text to indicate how to use /whitelist.
+        - Logs startup and error messages.
         - Syncs application commands to the specified guild on ready.
-        - Prints a startup banner to stdout once ready.
+        - Sets the bot presence to guide users to use /whitelist.
+        - Exits the process with status 1 if required environment variables
+          are missing.
 
     Notes:
-        Ensure the bot has permissions to create slash commands in the target guild,
-        and that the environment variables and config.yaml are correctly set.
+        Ensure:
+        - The bot has permissions to create slash commands in the target guild.
+        - Environment variables WALTER_DISCORD_KEY and WALTER_GUILD_ID are set.
+        - config.yaml exists with the expected structure and keys.
     """
     config = load_config()
     discord_database_path = config["paths"]["discord_database"]
-    minecraft_database_path = config["paths"]["minecraft_database"]
     # admin_uid = config["admin_uid"]
     rcon_secret = config["rcon_secret"]
 
@@ -106,7 +134,7 @@ def main():
     client = discord.Client(intents=intents)
     tree = app_commands.CommandTree(client)
 
-    walter = Walter(discord_database_path, minecraft_database_path, rcon_secret)
+    walter = Walter(discord_database_path, rcon_secret)
 
     @tree.command(
         name="whitelist",
@@ -114,21 +142,24 @@ def main():
         guild=discord.Object(id=guild_id),
     )
     async def whitelist(interaction, minecraft_username: str):
-        """Slash command to add a Minecraft username to the whitelist.
+        """
+        Add a Minecraft username to the server whitelist via a slash command.
 
-        Args:
-        interaction (discord.Interaction): The interaction context from Discord.
-        minecraft_username (str): The Minecraft username to be whitelisted.
+        Parameters:
+            interaction (discord.Interaction): The Discord interaction context.
+            minecraft_username (str): The Minecraft username to whitelist.
 
         Behavior:
-            - Looks up the invoking Discord user.
+            - Resolves the invoking Discord user name.
             - Delegates to Walter.add_to_whitelist(discord_username, minecraft_username).
-            - Sends a localized response based on returned status code:
-              1 => Already used whitelist token (error).
-              2 => Already whitelisted (info).
-              else => Success message with update delay notice.
-        """
+            - Sends a localized response based on the returned status:
+              - WalterStatus.DISCORD_ALREADY_USED: User has already consumed their whitelist token.
+              - WalterStatus.ALREADY_WHITELISTED: User is already whitelisted.
+              - Otherwise: Success response indicating whitelist update may take ~30 seconds.
 
+        Responses:
+            Sends one ephemeral message to the invoking user describing the outcome.
+        """
         discord_username = str(interaction.user)
         status_code = walter.add_to_whitelist(discord_username, minecraft_username)
 
@@ -147,14 +178,17 @@ def main():
 
     @client.event
     async def on_ready():
-        """Event handler fired when the Discord client is ready.
+        """
+        Fired when the Discord client has connected and is ready.
 
         Actions:
-            - Syncs application commands for the configured guild.
-            - Sets bot presence to guide use of /whitelist.
-            - Prints a startup banner to stdout.
+            - Syncs application commands to the configured guild.
+            - Sets the bot presence to “listening” with a hint for using /whitelist.
+            - Logs a startup banner to indicate the bot is operational.
 
-        This ensures the slash command is available and users see a helpful status.
+        Purpose:
+            Ensures the slash command is registered and users see a helpful status
+            indicating how to invoke the whitelist command.
         """
         await tree.sync(guild=discord.Object(id=guild_id))
 

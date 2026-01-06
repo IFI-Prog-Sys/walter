@@ -98,7 +98,6 @@ class Walter:
     def __init__(
         self,
         path_to_discord_database: str,
-        path_to_minecraft_database: str,
         rcon_secret: str,
     ):
         self.rcon_socket = MCRcon("127.0.0.1", rcon_secret)
@@ -107,13 +106,7 @@ class Walter:
         self._already_used: set[str] = self.recall_who_used(path_to_discord_database)
         logger.info("Loaded Discord database")
 
-        self._already_whitelisted: set[str] = self.recall_who_used(
-            path_to_minecraft_database
-        )
-        logger.info("Loaded Minecraft database")
-
         self._path_to_discord_database: str = path_to_discord_database
-        self._path_to_minecraft_database: str = path_to_minecraft_database
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, self._signal_close)
@@ -197,7 +190,7 @@ class Walter:
             logger.error("Error validating Minecraft user %s: %s", username, e)
             return False
 
-    def __add_player_to_whitelist(self, player_name: str):
+    def __add_player_to_whitelist(self, player_name: str) -> WalterStatus:
         """
         Issue an RCON command to add a player to the Minecraft whitelist.
 
@@ -213,6 +206,10 @@ class Walter:
         """
         response = self.rcon_socket.command(f"/whitelist add {player_name}")
         logger.info("(RCON) %s", response)
+        
+        if response == "Player is already whitelisted":
+            return WalterStatus.ALREADY_WHITELISTED
+        return WalterStatus.OK
 
     def add_to_whitelist(
         self, discord_username: str, player_name: str
@@ -247,27 +244,22 @@ class Walter:
         """
         if discord_username in self._already_used:
             return WalterStatus.DISCORD_ALREADY_USED
-        if player_name in self._already_whitelisted:
-            return WalterStatus.ALREADY_WHITELISTED
 
-        valid = self.__check_minecraft_user_is_valid(player_name)
-
-        if not valid:
+        minecraft_username_is_valid = self.__check_minecraft_user_is_valid(player_name)
+        if not minecraft_username_is_valid:
             return WalterStatus.MINECRAFT_USER_NOT_VALID
 
-        self.__add_player_to_whitelist(player_name)
+        add_to_whitelist_response = self.__add_player_to_whitelist(player_name)
+
+        if add_to_whitelist_response is WalterStatus.ALREADY_WHITELISTED:
+            return add_to_whitelist_response
 
         self._already_used.add(discord_username)
         self.__write_to_username_database(
             self._path_to_discord_database, self._already_used
         )
 
-        self._already_whitelisted.add(player_name)
-        self.__write_to_username_database(
-            self._path_to_minecraft_database, self._already_whitelisted
-        )
-
-        return WalterStatus.OK
+        return add_to_whitelist_response
 
     def __write_to_username_database(self, path_to_database, names):
         """
