@@ -2,21 +2,18 @@
 Prog.Sys();'s one and only Minecraft whitelist management bot
 
 ## Basic Overview
-Walter is essentially a specialised JSON editor that, upon request, modifies the Minecraft server whitelist.json.
+Walter is a Discord bot that, upon request, adds a player to your Minecraft server's whitelist.
 
-The bot comes in two parts; The sytemd service and the datapack.
-The systemd service runs the main.py file in the background, and makes the necessary edits to the whitelist.json file.
-The datapack forces the server to acknowledge these updates by reloading the whitelist every 15 s.
+It works by running as a systemd service that listens for commands on Discord. When a user runs the `/whitelist` command, the bot validates their Minecraft username and uses RCON to issue a `whitelist add` command to the Minecraft server.
 
 ## File structure
 **Note:** Install files are not included
 ```
 walter/
-├── data
+├── data/
 │   ├── discord_database
-│   ├── minecraft_database
-│   ├── secrets.json
-│   └── whitelist.json -> /path/to/whitelist.json
+│   └── minecraft_database
+├── config.yaml
 ├── main.py
 └── walter.py
 ```
@@ -24,35 +21,42 @@ walter/
 ## Getting started
 **Note:** Walter has currently been tested on Python 3.9.21 running on Oracle Linux Server release 9.6
 
-1. Install all the project dependencies with:
-```bash
-$ pip install -r requirements.txt
-```
-2. Create an application in the Discord Developer Portal
-3. Copy the secret application API key to the value under "token:" in /data/secrets.json
-4. Copy your server's guild ID to the value under "guild\_id:" in /data/secrets.json
-5. Invite your new Discord application into your server with the following permissions:
-    - View Channels
-    - Send Messages and Create Posts
-    - Send Messages in Threads and Posts
-    - Read Message History
-    - Use Application Commands
-    - **Note:** There is a good chance not all these permissions are strictly speaking necessary but these are what have worked for us.
-6. In the /data/ directory, create a symlink called "whitelist.json" that points to your server's whitelist.json file.
-7. Edit "walter.service" and specify the "ExecStart" directory and "WorkingDirectory"
-8. Copy the provided walter.service file into "/etc/systemd/user/" 
-9. Start the service by running
-```bash
-$ systemctl --user start walter.service
-```
-10. *(optional)* Enable auto startup by running
-```bash
-$ systemctl --user enable walter.service
-```
-11. Copy the provided  "walter\_server\_integrations" datapack into your server's /world/datapacks/ directory.
-12. *(if already running)* Restart your Minecraft server to enable the new datapack
-13. In your server console run:
-```
-> function walter_server_integrations:start
-```
-This command will have to be run after every server reboot to enable automatic whitelist reloading
+1.  Install all the project dependencies with:
+    ```bash
+    $ pip install -r requirements.txt
+    ```
+2.  On your Minecraft server, enable RCON by editing the `server.properties` file. Set the following values:
+    -   `enable-rcon=true`
+    -   `rcon.password=YOUR_RCON_PASSWORD_HERE`
+    -   Make sure the `rcon.port` (default 25575) is not blocked by a firewall.
+    -   Restart your Minecraft server for the changes to take effect.
+
+3.  Create an application in the Discord Developer Portal.
+
+4.  Edit the `config.yaml` file and set `rcon_secret` to the password you chose in `server.properties`.
+
+5.  Set the following environment variables for the user that will run the bot:
+    -   `WALTER_DISCORD_KEY`: Your Discord application's bot token.
+    -   `WALTER_GUILD_ID`: The ID of your Discord server (guild).
+    You can set these permanently by adding `export VAR_NAME="value"` to your shell's profile (e.g., `~/.bash_profile` or `~/.profile`).
+
+6.  Invite your new Discord application into your server with the following permissions:
+    -   View Channels
+    -   Send Messages and Create Posts
+    -   Send Messages in Threads and Posts
+    -   Read Message History
+    -   Use Application Commands
+    -   **Note:** There is a good chance not all these permissions are strictly speaking necessary but these are what have worked for us.
+
+7.  Edit `walter.service` and specify the `ExecStart` path to your `main.py` and the `WorkingDirectory` to the project folder.
+
+8.  Copy the provided `walter.service` file into `/etc/systemd/user/`.
+
+9.  Start the service by running:
+    ```bash
+    $ systemctl --user start walter.service
+    ```
+10. *(optional)* Enable auto startup by running:
+    ```bash
+    $ systemctl --user enable walter.service
+    ```
