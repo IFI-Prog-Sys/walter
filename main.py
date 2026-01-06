@@ -4,7 +4,7 @@ from os import environ
 import discord
 from discord import app_commands
 import yaml
-from walter import Walter
+from walter import Walter, WalterStatus
 
 # ▗▄▄▖  ▗▄▖ ▗▖ ▗▖▗▄▄▄▖▗▄▄▖ ▗▄▄▄▖▗▄▄▄
 # ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌ ▐▌▐▌   ▐▌  █
@@ -73,6 +73,7 @@ def main():
     2. Read required environment variables:
        - WALTER_DISCORD_KEY (bot token)
        - WALTER_GUILD_ID (guild/server ID)
+       - ADMIN_UID (User ID of admin to be pinged)
     3. Initialize Discord client and application command tree.
     4. Instantiate Walter backend with database paths.
     5. Register the /whitelist command and ready event.
@@ -88,14 +89,16 @@ def main():
         and that the environment variables and config.yaml are correctly set.
     """
     config = load_config()
-    DISCORD_DATABASE_PATH = config["paths"]["discord_database"]
-    MINECRAFT_DATABASE_PATH = config["paths"]["minecraft_database"]
+    discord_database_path = config["paths"]["discord_database"]
+    minecraft_database_path = config["paths"]["minecraft_database"]
+    # admin_uid = config["admin_uid"]
+    rcon_secret = config["rcon_secret"]
 
-    TOKEN, GUILD_ID = environ.get("WALTER_GUILD_ID"), environ.get("WALTER_DISCORD_KEY")
-    if not TOKEN:
+    token, guild_id = environ.get("WALTER_DISCORD_KEY"), environ.get("WALTER_GUILD_ID")
+    if not token:
         logger.error("Couldn't get Discord API token from env vars")
         sys.exit(1)
-    elif not GUILD_ID:
+    elif not guild_id:
         logger.error("Couldn't get Guild ID from env vars")
         sys.exit(1)
 
@@ -103,12 +106,12 @@ def main():
     client = discord.Client(intents=intents)
     tree = app_commands.CommandTree(client)
 
-    walter = Walter(DISCORD_DATABASE_PATH, MINECRAFT_DATABASE_PATH)
+    walter = Walter(discord_database_path, minecraft_database_path, rcon_secret)
 
     @tree.command(
         name="whitelist",
         description="Add yourself to the minecraft server whitelist",
-        guild=discord.Object(id=GUILD_ID),
+        guild=discord.Object(id=guild_id),
     )
     async def whitelist(interaction, minecraft_username: str):
         """Slash command to add a Minecraft username to the whitelist.
@@ -129,13 +132,13 @@ def main():
         discord_username = str(interaction.user)
         status_code = walter.add_to_whitelist(discord_username, minecraft_username)
 
-        if status_code == 1:  # Status code 1 is an erorr
+        if status_code == WalterStatus.DISCORD_ALREADY_USED:
             await interaction.response.send_message(
-                ":red_square: :orange_book: :red_square:\nOops, det virker som om du allerede har brukt din whitelist token! Vennligst ta kontakt med en @’server_admin om du mener det har oppstått en feil, eller om du vil whiteliste noen andre."
+                ":red_square: :orange_book: :red_square:\nOops, det virker som om du allerede har brukt din whitelist token! Vennligst ta kontakt med en @server_admin om du mener det har oppstått en feil, eller om du vil whiteliste noen andre."
             )
-        elif status_code == 2:
+        elif status_code == WalterStatus.ALREADY_WHITELISTED:
             await interaction.response.send_message(
-                ":yellow_square::grey_question::yellow_square:\n Oops, det virker som om du allerede har blitt whitelistet på serveren.\nVennligst ta kontakt med en @’server_admin om du mener det har oppstått en feil"
+                ":yellow_square::grey_question::yellow_square:\n Oops, det virker som om du allerede har blitt whitelistet på serveren.\nVennligst ta kontakt med en @server_admin om du mener det har oppstått en feil"
             )
         else:
             await interaction.response.send_message(
@@ -153,7 +156,7 @@ def main():
 
         This ensures the slash command is available and users see a helpful status.
         """
-        await tree.sync(guild=discord.Object(id=GUILD_ID))
+        await tree.sync(guild=discord.Object(id=guild_id))
 
         # Courtesy of https://stackoverflow.com/a/70644609
         await client.change_presence(
@@ -164,11 +167,9 @@ def main():
             ),
         )
 
-        print(
-            "\n" + "-" * 10 + "Good morning, Walter is fully awake!" + "-" * 10 + "\n"
-        )
+        logger.info("Good morning, Walter is fully awake!")
 
-    client.run(TOKEN)
+    client.run(token)
 
 
 if __name__ == "__main__":
