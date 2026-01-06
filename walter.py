@@ -212,7 +212,7 @@ class Walter:
             - Assumes the RCON socket is connected and authenticated.
         """
         response = self.rcon_socket.command(f"/whitelist add {player_name}")
-        logger.info("RCON: %s", response)
+        logger.info("(RCON) %s", response)
 
     def add_to_whitelist(
         self, discord_username: str, player_name: str
