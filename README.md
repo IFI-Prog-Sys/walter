@@ -94,7 +94,7 @@ python main.py
 This ensures the bot runs in the background and restarts automatically.
 
 1.  **Edit `walter.service`:**
-    Replace the placeholder paths for `ExecStart` and `WorkingDirectory` with the **absolute paths** to your project files.
+    Replace the placeholder paths for `ExecStart` and `WorkingDirectory` with the **absolute paths** to your project files. You must also set the `WALTER_DISCORD_KEY` and `WALTER_GUILD_ID` environment variables here.
     ```ini
     [Unit]
     Description=Walter The Whitelister
@@ -102,6 +102,8 @@ This ensures the bot runs in the background and restarts automatically.
     [Service]
     ExecStart=/usr/bin/python /home/user/path/to/walter/main.py
     WorkingDirectory=/home/user/path/to/walter
+    Environment=WALTER_DISCORD_KEY=your_api_key_here
+    Environment=WALTER_GUILD_ID=your_guild_id_here
 
     [Install]
     WantedBy=default.target
