@@ -4,7 +4,7 @@ Description=Walter The Whitelister
 [Service]
 ExecStart=/usr/bin/python /path/to/main.py
 WorkingDirectory=/path/to/walter/folder
-
+Environment=WALTER_DISCORD_KEY=your_api_key_here
 
 [Install]
 WantedBy=default.target
