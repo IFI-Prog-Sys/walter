@@ -57,18 +57,18 @@ Make sure the `rcon.port` (default: 25575) is not blocked by a firewall. Restart
 
 ### 5. Configure Walter
 1.  **Edit `config.yaml`:**
-    -   `rcon_secret`: Set this to the RCON password you chose in `server.properties`.
-    -   The other settings can typically be left as default.
+    -   `guild_id`: Set this to the ID of your Discord server (guild).
+    -   `paths`: Ensure `discord_database` points to a valid path (default is usually fine).
 
 2.  **Set Environment Variables:**
-    The bot requires two environment variables to authenticate with Discord.
+    The bot requires two environment variables to authenticate with Discord and the Minecraft server.
     -   `WALTER_DISCORD_KEY`: Your Discord application's bot token.
-    -   `WALTER_GUILD_ID`: The ID of your Discord server (guild).
+    -   `WALTER_RCON_SECRET`: The RCON password you chose in `server.properties`.
 
     You can set these permanently by adding the following lines to your shell's profile (e.g., `~/.bash_profile` or `~/.zshrc`), then running `source ~/.bash_profile` or opening a new terminal.
     ```bash
     export WALTER_DISCORD_KEY="YOUR_DISCORD_BOT_TOKEN"
-    export WALTER_GUILD_ID="YOUR_DISCORD_SERVER_ID"
+    export WALTER_RCON_SECRET="YOUR_RCON_PASSWORD"
     ```
 
 ### 6. Invite the Bot to Your Server
@@ -103,7 +103,7 @@ This ensures the bot runs in the background and restarts automatically.
     ExecStart=/usr/bin/python /home/user/path/to/walter/main.py
     WorkingDirectory=/home/user/path/to/walter
     Environment=WALTER_DISCORD_KEY=your_api_key_here
-    Environment=WALTER_GUILD_ID=your_guild_id_here
+    Environment=WALTER_RCON_SECRET=your_rcon_password_here
 
     [Install]
     WantedBy=default.target
