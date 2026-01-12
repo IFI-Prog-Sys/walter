@@ -23,19 +23,6 @@ Signals:
 - SIGINT, SIGTERM: Trigger clean RCON disconnect, database connection closure, and process exit.
 """
 
-# ▗▄▄▖  ▗▄▖ ▗▖ ▗▖▗▄▄▄▖▗▄▄▖ ▗▄▄▄▖▗▄▄▄
-# ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌ ▐▌▐▌   ▐▌  █
-# ▐▛▀▘ ▐▌ ▐▌▐▌ ▐▌▐▛▀▀▘▐▛▀▚▖▐▛▀▀▘▐▌  █
-# ▐▌   ▝▚▄▞▘▐▙█▟▌▐▙▄▄▖▐▌ ▐▌▐▙▄▄▖▐▙▄▄▀
-# ▗▄▄▖▗▖  ▗▖
-# ▐▌ ▐▌▝▚▞▘
-# ▐▛▀▚▖ ▐▌
-# ▐▙▄▞▘ ▐▌
-# ▗▄▄▄▖▗▖  ▗▖ ▗▄▄▖▗▄▄▖ ▗▄▄▖ ▗▄▄▄▖ ▗▄▄▖ ▗▄▄▖ ▗▄▖
-# ▐▌   ▐▌  ▐▌▐▌   ▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌   ▐▌   ▐▌ ▐▌
-# ▐▛▀▀▘▐▌  ▐▌ ▝▀▚▖▐▛▀▘ ▐▛▀▚▖▐▛▀▀▘ ▝▀▚▖ ▝▀▚▖▐▌ ▐▌
-# ▐▙▄▄▖ ▝▚▞▘ ▗▄▄▞▘▐▌   ▐▌ ▐▌▐▙▄▄▖▗▄▄▞▘▗▄▄▞▘▝▚▄▞▘
-
 logger = logging.getLogger("Walter.Walter")
 logger.setLevel(logging.DEBUG)
 
@@ -138,6 +125,7 @@ class Walter:
         """
         logger.info("Received signal %s; closing RCON and exiting.", signum)
         self.rcon_socket.disconnect()
+        self._discord_database_connection.commit()
         self._discord_database_connection.close()
         signal.signal(signum, signal.SIG_DFL)
         raise KeyboardInterrupt if signum == signal.SIGINT else SystemExit

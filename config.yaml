@@ -1,4 +1,4 @@
 paths:
   discord_database: "./discord_database.db"
 admin_uid: "YOUR_UID_HERE"
-rcon_secret: "YOUR_RCON_PASSWORD_HERE"
+guild_id: "YOUR_GUILD_ID_HERE"

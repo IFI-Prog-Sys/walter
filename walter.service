@@ -5,7 +5,7 @@ Description=Walter The Whitelister
 ExecStart=/usr/bin/python /path/to/main.py
 WorkingDirectory=/path/to/walter/folder
 Environment=WALTER_DISCORD_KEY=your_api_key_here
-Environment=WALTER_GUILD_ID=your_guild_id_here
+Environment=WALTER_RCON_SECRET=your_rcon_password_here
 
 [Install]
 WantedBy=default.target
