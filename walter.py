@@ -215,7 +215,7 @@ class Walter:
             - Writes to the Discord user database if the operation is successful.
         """
         database_query_result = self._discord_database_cursor.execute(
-            f"SELECT username FROM users WHERE username='{discord_username}'"
+            "SELECT username FROM users WHERE username=?", (discord_username,)
         )
         username_exists = database_query_result.fetchone() is not None
         if username_exists:
@@ -251,10 +251,10 @@ class Walter:
         """
         try:
             current_time = datetime.now().isoformat()
-            self._discord_database_cursor.execute(f"""
-                INSERT INTO users VALUES
-                    ('{discord_username}', 0, '{current_time}')
-            """)
+            self._discord_database_cursor.execute(
+                "INSERT INTO users VALUES (?, ?, ?)",
+                (discord_username, 0, current_time),
+            )
             self._discord_database_connection.commit()
             logger.info("Added %s to database", discord_username)
 
