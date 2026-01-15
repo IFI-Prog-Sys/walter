@@ -194,7 +194,7 @@ def main():
             )
         else:
             await interaction.response.send_message(
-                f":green_circle: :book: :green_circle:\n{minecraft_username} har blitt lagt til whitelisten! Vennligst vent 30 sekunder sånn at whitelist oppdateringen kan vedtas.\nGood luck, have fun!"
+                f":green_circle: :book: :green_circle:\n{minecraft_username} har blitt lagt til whitelisten! Good luck, have fun!"
             )
 
     @client.event
